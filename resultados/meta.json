@@ -1,0 +1,10 @@
+{
+  "meridian": "2.0.0",
+  "semanas": 156,
+  "semanas_teste": 20,
+  "chains": 4,
+  "adapt": 500,
+  "burnin": 500,
+  "keep": 500,
+  "midia_total_verdade_contas": 32.94233048395088
+}

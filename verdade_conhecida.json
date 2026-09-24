@@ -1,0 +1,136 @@
+{
+  "novas_contas": {
+    "y_total": 1409219.3122223737,
+    "midia_total": 464229.683075954,
+    "baseline_pct_total": 0.6511998447575501,
+    "canais": {
+      "google_search": {
+        "contribuicao_total": 129631.18227648555,
+        "contribuicao_pct": 0.09198794052293675,
+        "gasto_total_mil": 16799.29,
+        "roi": 7.716467914803872,
+        "beta": 1700.0,
+        "decay": 0.2,
+        "ec": 1.0,
+        "slope": 1.6
+      },
+      "meta": {
+        "contribuicao_total": 97731.60698673641,
+        "contribuicao_pct": 0.0693515949853194,
+        "gasto_total_mil": 19493.059999999998,
+        "roi": 5.013661630689919,
+        "beta": 1500.0,
+        "decay": 0.45,
+        "ec": 1.2,
+        "slope": 1.4
+      },
+      "tiktok": {
+        "contribuicao_total": 63649.06160756607,
+        "contribuicao_pct": 0.04516618602621187,
+        "gasto_total_mil": 5846.23,
+        "roi": 10.887197665429872,
+        "beta": 900.0,
+        "decay": 0.5,
+        "ec": 0.9,
+        "slope": 2.0
+      },
+      "youtube": {
+        "contribuicao_total": 37963.08501955365,
+        "contribuicao_pct": 0.026939089388212347,
+        "gasto_total_mil": 4459.87,
+        "roi": 8.512150582764441,
+        "beta": 700.0,
+        "decay": 0.65,
+        "ec": 1.4,
+        "slope": 1.3
+      },
+      "afiliados": {
+        "contribuicao_total": 106521.31977145949,
+        "contribuicao_pct": 0.0755888872992187,
+        "gasto_total_mil": 8448.12,
+        "roi": 12.608878634709198,
+        "beta": 1300.0,
+        "decay": 0.15,
+        "ec": 0.8,
+        "slope": 1.1
+      },
+      "display_programatico": {
+        "contribuicao_total": 28733.42741415278,
+        "contribuicao_pct": 0.020389606617609756,
+        "gasto_total_mil": 4844.9400000000005,
+        "roi": 5.930605418055285,
+        "beta": 350.0,
+        "decay": 0.4,
+        "ec": 0.7,
+        "slope": 1.2
+      }
+    }
+  },
+  "receita_mil": {
+    "y_total": 515044.1601239459,
+    "midia_total": 128778.40040627512,
+    "baseline_pct_total": 0.7354307103881487,
+    "canais": {
+      "google_search": {
+        "contribuicao_total": 42702.036514607,
+        "contribuicao_pct": 0.08290946645105289,
+        "gasto_total_mil": 16799.29,
+        "roi": 2.541895313111864,
+        "beta": 560.0,
+        "decay": 0.2,
+        "ec": 1.0,
+        "slope": 1.6
+      },
+      "meta": {
+        "contribuicao_total": 24758.673769973226,
+        "contribuicao_pct": 0.04807097271817435,
+        "gasto_total_mil": 19493.059999999998,
+        "roi": 1.2701276131081127,
+        "beta": 380.0,
+        "decay": 0.45,
+        "ec": 1.2,
+        "slope": 1.4
+      },
+      "tiktok": {
+        "contribuicao_total": 13437.024117152836,
+        "contribuicao_pct": 0.026089071884475307,
+        "gasto_total_mil": 5846.23,
+        "roi": 2.2984083960351946,
+        "beta": 190.0,
+        "decay": 0.5,
+        "ec": 0.9,
+        "slope": 2.0
+      },
+      "youtube": {
+        "contribuicao_total": 28201.148871668425,
+        "contribuicao_pct": 0.05475481726631322,
+        "gasto_total_mil": 4459.87,
+        "roi": 6.323311861482157,
+        "beta": 520.0,
+        "decay": 0.65,
+        "ec": 1.4,
+        "slope": 1.3
+      },
+      "afiliados": {
+        "contribuicao_total": 12290.921512091481,
+        "contribuicao_pct": 0.023863820743319678,
+        "gasto_total_mil": 8448.12,
+        "roi": 1.4548706116972154,
+        "beta": 150.0,
+        "decay": 0.15,
+        "ec": 0.8,
+        "slope": 1.1
+      },
+      "display_programatico": {
+        "contribuicao_total": 7388.595620782143,
+        "contribuicao_pct": 0.014345557512979216,
+        "gasto_total_mil": 4844.9400000000005,
+        "roi": 1.525012821785645,
+        "beta": 90.0,
+        "decay": 0.4,
+        "ec": 0.7,
+        "slope": 1.2
+      }
+    }
+  }
+}
