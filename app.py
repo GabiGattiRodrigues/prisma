@@ -1130,9 +1130,9 @@ with abas[9]:
     st.markdown(T("### 2. O que o modelo aprendeu, por canal", "### 2. What the model learned, per channel"))
     p1, p2 = st.columns(2)
     np_ = p1.radio("KPI", ["contas", "receita"], format_func=KPI_FMT, horizontal=True, key="pm_kpi")
-    _mod_rot = {"ajustado": T("Ajustado", "Tuned"), "ingenuo": T("Ingênuo", "Naive")}
-    mod_p = p2.radio(T("Modelo", "Model"), ["ajustado", "ingenuo"], format_func=_mod_rot.get, horizontal=True, key="pm_mod")
-    arq = f"parametros_{'ingenuo_' if mod_p == 'ingenuo' else ''}{np_}.csv"
+    _mod_rot = {"calibrado": T("Calibrado", "Calibrated"), "ajustado": T("Ajustado", "Tuned"), "ingenuo": T("Ingênuo", "Naive")}
+    mod_p = p2.radio(T("Modelo", "Model"), ["calibrado", "ajustado", "ingenuo"], format_func=_mod_rot.get, horizontal=True, key="pm_mod")
+    arq = f"parametros_{ {'ingenuo': 'ingenuo_', 'ajustado': '', 'calibrado': 'calib_'}[mod_p] }{np_}.csv"
     if not os.path.exists(os.path.join(RES, arq)):
         st.warning(T("Parâmetros ainda não exportados: rode `exportar_resultados.py`.", "Parameters not exported yet: run `exportar_resultados.py`."))
     else:
@@ -1176,6 +1176,103 @@ with abas[9]:
         if mod_p == "ingenuo":
             st.info(T("No modelo ingênuo a inclinação é fixa em 1 e o ROI usa o prior padrão, por isso os intervalos são largos e o ROI de alguns canais foge do gabarito.",
                       "In the naive model the slope is fixed at 1 and the ROI uses the default prior, which is why the intervals are wide and some channels' ROI strays from the answer key."))
+
+    # ---------- 2b. por que os parâmetros mudaram entre os modelos
+    st.markdown(T("### Por que os parâmetros mudam de um modelo para o outro?", "### Why do the parameters change from one model to the next?"))
+    st.markdown(T(
+        "Os três modelos olham **exatamente os mesmos dados**. O que muda é o que cada um sabe **antes** de olhar (controles e priors). "
+        "Como o modelo divide o resultado entre baseline, controles e canais, mexer em uma peça faz o crédito escorrer para as outras.",
+        "The three models look at **exactly the same data**. What changes is what each one knows **before** looking (controls and priors). "
+        "Since the model splits the result across baseline, controls and channels, moving one piece makes credit flow to the others."))
+    _fs = {m: f"parametros_{p}{np_}.csv" for m, p in [("ingenuo", "ingenuo_"), ("ajustado", ""), ("calibrado", "calib_")]}
+    if all(os.path.exists(os.path.join(RES, f)) for f in _fs.values()):
+        PP = {m: ler(f) for m, f in _fs.items()}
+        g_ = lambda m, par: PP[m][PP[m]["parametro"] == par].set_index("canal").reindex(CANAIS)
+        par_c = st.radio(T("Parâmetro", "Parameter"), ["roi", "decay", "ec"], horizontal=True, key="pm_cmp",
+                         format_func={"roi": "ROI", "decay": T("Decay (memória)", "Decay (memory)"), "ec": T("ec (saturação)", "ec (saturation)")}.get)
+        fc = go.Figure()
+        for m, cor in [("ingenuo", CINZA), ("ajustado", AZUL_CLARO), ("calibrado", AZUL)]:
+            d_ = g_(m, par_c)
+            fc.add_trace(go.Bar(x=[NOMES[c] for c in CANAIS], y=d_["media"], name=_mod_rot[m], marker_color=cor))
+        fc.add_trace(go.Scatter(x=[NOMES[c] for c in CANAIS], y=g_("ajustado", par_c)["verdade"], mode="markers", name=T("verdade", "ground truth"),
+                                marker=dict(color=LARANJA, size=12, symbol="diamond")))
+        fc.update_layout(barmode="group", legend=dict(orientation="h", y=-0.25),
+                         title=T(f"{par_c if par_c != 'roi' else 'ROI'} nos três modelos ({KPIS[np_]['rotulo']})", f"{par_c if par_c != 'roi' else 'ROI'} across the three models ({KPIS[np_]['rotulo']})"))
+        mostrar(fc, 360)
+
+        ri, ra, rc_ = g_("ingenuo", "roi"), g_("ajustado", "roi"), g_("calibrado", "roi")
+        top_i = ri["media"].idxmax()
+        subiram = [c for c in CANAIS if c != top_i and ra.loc[c, "media"] > ri.loc[c, "media"] * 1.2]
+        passou = [c for c in subiram if abs(ra.loc[c, "media"] - ra.loc[c, "verdade"]) > abs(ri.loc[c, "media"] - ri.loc[c, "verdade"])
+                  and ra.loc[c, "media"] > 1.25 * ra.loc[c, "verdade"]]
+        _lst = " e ".join([", ".join(NOMES[c] for c in passou[:-1]), NOMES[passou[-1]]] if len(passou) > 1 else [NOMES[passou[0]]]) if passou else ""
+        _lst_en = _lst.replace(" e ", " and ")
+        _pas_pt = (f" Nem sempre para mais perto da verdade: {_lst} {'passaram' if len(passou) > 1 else 'passou'} do ponto (mais de 25% acima do real), "
+                   "porque o modelo ainda confunde o canal com coisas que acontecem ao mesmo tempo. É exatamente o caso que a calibração com experimento resolve.") if passou else ""
+        _pas_en = (f" Not always closer to the truth: {_lst_en} overshot (more than 25% above the real value), "
+                   "because the model still confuses the channel with things that happen at the same time. That is exactly the case calibrating with an experiment fixes.") if passou else ""
+        ex_c = ler(f"experimento_{np_}.csv").iloc[0]["canal"] if os.path.exists(os.path.join(RES, f"experimento_{np_}.csv")) else None
+        outros = [c for c in CANAIS if c != ex_c]
+        quem = max(outros, key=lambda c: abs(rc_.loc[c, "media"] - ra.loc[c, "media"])) if ex_c else None
+        ec_a, ec_c = g_("ajustado", "ec"), g_("calibrado", "ec"); b_a, b_c = g_("ajustado", "beta"), g_("calibrado", "beta")
+        nm = lambda c: NOMES[c]
+        st.markdown(T("#### Do ingênuo para o ajustado", "#### From naive to tuned"))
+        st.markdown(T(
+            f"- **{nm(top_i)}: ROI de {num(ri.loc[top_i,'media'],1)} para {num(ra.loc[top_i,'media'],1)}** (verdade {num(ri.loc[top_i,'verdade'],1)}). "
+            f"O investimento nele sobe nas épocas de mais demanda. Sem sazonalidade no modelo ingênuo, essa demanda não tinha para onde ir e virou crédito do {nm(top_i)}. "
+            "Com seno/cosseno do ano e os meses de novembro e dezembro como controles, esse crédito voltou para o baseline.\n"
+            + (f"- **{', '.join(nm(c) for c in subiram)}: ROI subiu.** Dois motivos: o crédito que saiu do {nm(top_i)} foi redistribuído, e o prior padrão do Meridian "
+               "(mediana perto de 1) puxava o ROI dos canais para baixo. O prior do ajustado, com 95% entre 1 e 25 contas por R$ mil (0,3 e 8 em receita), deixa o ROI ir para onde os dados mostram." + _pas_pt + "\n" if subiram else "")
+            + "- **Decay e ec mudam sem um padrão claro.** São os parâmetros mais difíceis de identificar com 3 anos de dados semanais: muitas combinações deles "
+            "desenham curvas parecidas. Por isso os intervalos são largos e eles se mexem quando qualquer outra peça muda. "
+            "Além disso, a inclinação (slope) fica fixa em 1, então o ec se ajusta para compensar a forma em S que o gerador usa.",
+            f"- **{nm(top_i)}: ROI from {num(ri.loc[top_i,'media'],1)} to {num(ra.loc[top_i,'media'],1)}** (ground truth {num(ri.loc[top_i,'verdade'],1)}). "
+            f"Spend on it rises when demand is high. With no seasonality in the naive model, that demand had nowhere to go and became {nm(top_i)}'s credit. "
+            "With yearly sine/cosine and November/December as controls, that credit went back to the baseline.\n"
+            + (f"- **{', '.join(nm(c) for c in subiram)}: ROI went up.** Two reasons: the credit leaving {nm(top_i)} was redistributed, and Meridian's default prior "
+               "(median near 1) pulled the channels' ROI down. The tuned prior, with 95% between 1 and 25 accounts per R$ 1k (0.3 and 8 for revenue), lets ROI go where the data points." + _pas_en + "\n" if subiram else "")
+            + "- **Decay and ec move with no clear pattern.** They are the hardest parameters to identify with 3 years of weekly data: many combinations of them "
+            "draw similar curves. That's why the intervals are wide and they shift whenever any other piece changes. "
+            "Also, the slope is fixed at 1, so ec adjusts to compensate for the S shape the generator uses."))
+        if ex_c:
+            _sub = ra.loc[quem, "media"] < ra.loc[quem, "verdade"] and rc_.loc[quem, "media"] > ra.loc[quem, "media"]
+            _mud = abs(rc_.loc[quem, "media"] / ra.loc[quem, "media"] - 1) * 100
+            if _sub:
+                _red_pt = (f"- **O crédito que saiu dele foi para quem estava subestimado.** Quem mais mudou foi {nm(quem)}: ROI de {num(ra.loc[quem,'media'],2)} para "
+                           f"{num(rc_.loc[quem,'media'],2)} (verdade {num(ra.loc[quem,'verdade'],2)}). Os outros canais quase não se mexeram.\n")
+                _red_en = (f"- **The credit it lost went to the underestimated channels.** The one that moved most was {nm(quem)}: ROI from {num(ra.loc[quem,'media'],2)} to "
+                           f"{num(rc_.loc[quem,'media'],2)} (ground truth {num(ra.loc[quem,'verdade'],2)}). The other channels barely moved.\n")
+            else:
+                _red_pt = (f"- **Os outros canais quase não se mexeram.** O que mais mudou foi {nm(quem)}, só {num(_mud,0)}% "
+                           f"({num(ra.loc[quem,'media'],2)} para {num(rc_.loc[quem,'media'],2)}; verdade {num(ra.loc[quem,'verdade'],2)}). "
+                           "Aqui a correção ficou concentrada no próprio canal testado.\n")
+                _red_en = (f"- **The other channels barely moved.** The one that changed most was {nm(quem)}, only {num(_mud,0)}% "
+                           f"({num(ra.loc[quem,'media'],2)} to {num(rc_.loc[quem,'media'],2)}; ground truth {num(ra.loc[quem,'verdade'],2)}). "
+                           "Here the correction stayed concentrated in the tested channel itself.\n")
+            st.markdown(T("#### Do ajustado para o calibrado", "#### From tuned to calibrated"))
+            st.markdown(T(
+                f"- **Só um prior mudou: o do {nm(ex_c)}**, que passou a vir do experimento. O ROI dele foi de {num(ra.loc[ex_c,'media'],2)} para "
+                f"{num(rc_.loc[ex_c,'media'],2)} (verdade {num(ra.loc[ex_c,'verdade'],2)}).\n"
+                + _red_pt +
+                f"- **Para baixar o ROI, o modelo mexeu na curva do {nm(ex_c)}:** o beta (altura máxima do efeito) foi de {num(b_a.loc[ex_c,'media'],2)} para {num(b_c.loc[ex_c,'media'],2)} "
+                f"e o ec de {num(ec_a.loc[ex_c,'media'],2)} para {num(ec_c.loc[ex_c,'media'],2)}. O ROI é o resultado da curva inteira, então o modelo pode chegar no mesmo ROI "
+                "com combinações diferentes desses parâmetros. É por isso que vale olhar a **curva de resposta**, e não cada parâmetro isolado.",
+                f"- **Only one prior changed: {nm(ex_c)}'s**, which now comes from the experiment. Its ROI went from {num(ra.loc[ex_c,'media'],2)} to "
+                f"{num(rc_.loc[ex_c,'media'],2)} (ground truth {num(ra.loc[ex_c,'verdade'],2)}).\n"
+                + _red_en +
+                f"- **To lower the ROI, the model reshaped {nm(ex_c)}'s curve:** beta (the effect's maximum height) went from {num(b_a.loc[ex_c,'media'],2)} to {num(b_c.loc[ex_c,'media'],2)} "
+                f"and ec from {num(ec_a.loc[ex_c,'media'],2)} to {num(ec_c.loc[ex_c,'media'],2)}. ROI comes from the whole curve, so the model can reach the same ROI "
+                "with different combinations of these parameters. That's why it's worth looking at the **response curve**, not at each parameter in isolation."))
+        with st.expander(T("Tabela: os três modelos lado a lado", "Table: the three models side by side")):
+            linhas_ = []
+            for par, rot in [("roi", "ROI"), ("decay", "Decay"), ("ec", "ec")]:
+                for c in CANAIS:
+                    linhas_.append({T("Parâmetro", "Parameter"): rot, T("Canal", "Channel"): nm(c),
+                                    _mod_rot["ingenuo"]: num(g_("ingenuo", par).loc[c, "media"], 2),
+                                    _mod_rot["ajustado"]: num(g_("ajustado", par).loc[c, "media"], 2),
+                                    _mod_rot["calibrado"]: num(g_("calibrado", par).loc[c, "media"], 2),
+                                    T("Verdade", "Ground truth"): num(g_("ajustado", par).loc[c, "verdade"], 2)})
+            st.table(pd.DataFrame(linhas_))
 
     st.markdown(T("### 3. Controles e promoção: quanto cada um vale", "### 3. Controls and promotion: what each one is worth"))
     st.caption(T("Efeito de +1 unidade do controle no KPI da semana (média e IC 90%). Os controles foram centrados, então seus efeitos são desvios em torno do nível médio do baseline.",
