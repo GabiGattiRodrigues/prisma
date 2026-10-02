@@ -13,6 +13,8 @@ Os dados são sintéticos e o gerador guarda a verdade (ROI, adstock, saturaçã
 - Decomposição completa: canais + baseline + controles (sazonalidade, promoção, macro, feriados).
 - Curvas de resposta e retorno marginal com regra de saturação.
 - **Quanto e onde investir**: dada uma verba X, como distribuir entre canais (com checagem contra as curvas verdadeiras).
+- **Calibração com experimento**: simula um teste de desligar o canal mais distorcido e usa o ROI medido como prior no Meridian, com antes e depois (em novas contas, o erro de atribuição cai de 1,9 para 1,0 p.p. e os 6 canais passam a ter a verdade no IC 90%).
+- **Em palavras simples**: o projeto inteiro explicado sem fórmula, com exemplos do dia a dia.
 - **Parâmetros**: configuração escolhida e o que o modelo aprendeu (ROI, decay, saturação, controles), com o gabarito ao lado.
 - **Recomendações**: resumo acionável dos melhores cenários das simulações (cronograma e alocação), com ressalvas.
 - **Quando investir**: bomba de uma vez ou diluído? Tudo em 1 mês ou espalhado? No geral e por campanha, com IC 90% e verdade.
@@ -28,6 +30,7 @@ Dê dois cliques em `iniciar.bat` (instala as dependências e abre o app). O app
 - `app.py`, `iniciar.bat`, `requirements.txt`, `.streamlit/`: app Streamlit
 - `resultados/`: saídas dos modelos que o app lê (geradas por `exportar_resultados.py`)
 - `mmm_meridian.ipynb`: notebook completo e comentado
+- `calibrar.py`: simula o experimento e reajusta o modelo calibrado (grava `resultados/*calib*` e `experimento_*`)
 - `exportar_resultados.py`: reajusta os 4 modelos e regrava `resultados/` (precisa de `pip install google-meridian`)
 - `mmm_dados_sinteticos.csv` e `verdade_conhecida.json`: dados semanais (156 semanas) e parâmetros plantados
 - `gerar_dados.py`: gerador dos dados (semente fixa)

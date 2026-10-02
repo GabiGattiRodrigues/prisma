@@ -271,13 +271,15 @@ st.title(f"{NOME_PROJETO}: {SUBTITULO}")
 # Ordem de exibição: resultados e decisões primeiro, explicações (parâmetros, dados, conceitos) no final.
 # O restante do código usa os índices originais, então mapeio pelo nome (chaves internas em PT; o rótulo exibido passa por T).
 _ORIG = ["O projeto", "Conceitos", "Dados e controles", "Por que ajustar?", "Novas contas", "Receita",
-         "Verdade vs. estimado", "Quanto e onde investir", "Quando investir", "Parâmetros", "Recomendações"]
-_EXIB = ["O projeto", "Novas contas", "Receita", "Verdade vs. estimado", "Quanto e onde investir", "Quando investir",
-         "Recomendações", "Parâmetros", "Dados e controles", "Por que ajustar?", "Conceitos"]
+         "Verdade vs. estimado", "Quanto e onde investir", "Quando investir", "Parâmetros", "Recomendações",
+         "Em palavras simples", "Calibração com experimento"]
+_EXIB = ["O projeto", "Em palavras simples", "Novas contas", "Receita", "Verdade vs. estimado", "Calibração com experimento",
+         "Quanto e onde investir", "Quando investir", "Recomendações", "Parâmetros", "Dados e controles", "Por que ajustar?", "Conceitos"]
 _TAB_EN = {"O projeto": "The project", "Conceitos": "Concepts", "Dados e controles": "Data and controls",
            "Por que ajustar?": "Why tune?", "Novas contas": "New accounts", "Receita": "Revenue",
            "Verdade vs. estimado": "Ground truth vs. estimated", "Quanto e onde investir": "How much and where to invest",
-           "Quando investir": "When to invest", "Parâmetros": "Parameters", "Recomendações": "Recommendations"}
+           "Quando investir": "When to invest", "Parâmetros": "Parameters", "Recomendações": "Recommendations",
+           "Em palavras simples": "In plain words", "Calibração com experimento": "Calibrating with an experiment"}
 _t = dict(zip(_EXIB, st.tabs([T(n, _TAB_EN[n]) for n in _EXIB])))
 abas = [_t[n] for n in _ORIG]
 
@@ -1316,3 +1318,304 @@ with abas[10]:
         "2. **Allocation:** move budget **gradually** from saturated channels to the ones with room to grow, and measure the result before continuing.\n"
         f"3. **Calibration:** {('the channels whose CI does not contain the ground truth (' + ', '.join(excl) + ') are the first candidates for an incrementality test (geo-lift), later used as an ROI prior.') if excl else 'no channel with a clear bias for this KPI; even so, a geo-lift on the largest channels is worthwhile.'}\n"
         "4. **Limits:** the model does not see response seasonality or CPM changes; Black Friday, for example, may perform differently from what the simulation suggests."))
+
+
+# ================================================================== EM PALAVRAS SIMPLES
+with abas[11]:
+    _ri = ler("retorno_ingenuo_contas.csv").set_index("canal"); _ra = ler("retorno_contas.csv").set_index("canal")
+    _gs_ing = _ri.loc["google_search", "contrib_pct"]; _gs_v = _ra.loc["google_search", "contrib_verdade"]
+    _meta_est, _meta_v = _ra.loc["meta", "roi"], _ra.loc["meta", "roi_verdade"]
+    _cr = ler("cronogramas_contas.csv")
+    _bomba = _cr[(_cr["canal"] == "RAZAO_TOTAL") & (_cr["cenario"] == "Bomba: 1 semana só")]["est"].iloc[0] * 100
+
+    st.markdown(T(
+        "Esta aba explica o projeto inteiro **sem fórmula**, com uma loja de limonada como exemplo. "
+        "Cada ideia tem a versão do dia a dia e, logo abaixo, onde ela aparece no Prisma.",
+        "This tab explains the whole project **without formulas**, using a lemonade stand as the example. "
+        "Each idea has an everyday version and, right below, where it shows up in Prisma."))
+
+    with st.container(border=True):
+        st.markdown(T("#### O case em 1 minuto", "#### The case in one minute"))
+        st.markdown(T(
+            "1. **A pergunta:** de onde vêm as vendas? Quanto é de cada propaganda e quanto viria de qualquer jeito?\n"
+            "2. **A armadilha:** o modelo acertava o total de vendas, mas dava o crédito para a propaganda errada.\n"
+            "3. **Por quê:** algumas propagandas sempre aconteciam junto com promoções, e o modelo não sabia separar uma da outra.\n"
+            "4. **O que eu fiz:** ensinei o modelo a olhar para as promoções, o calendário e a economia, e dei a ele uma noção do que é um retorno razoável.\n"
+            "5. **O passo final:** simulei um teste de desligar a propaganda suspeita e usei o resultado como dica confiável. Em novas contas, o modelo passou a acertar todos os canais.\n"
+            "6. **Como eu sei que acertou:** eu mesma criei os dados com o gabarito, então dá para conferir cada número.",
+            "1. **The question:** where do sales come from? How much is due to each ad, and how much would have happened anyway?\n"
+            "2. **The trap:** the model got total sales right, but gave the credit to the wrong ad.\n"
+            "3. **Why:** some ads always ran together with promotions, and the model couldn't tell them apart.\n"
+            "4. **What I did:** taught the model to account for promotions, the calendar and the economy, and gave it a sense of what a reasonable return is.\n"
+            "5. **The final step:** I simulated a test switching off the suspicious ad and used the result as a trusted hint. For new accounts, the model then got every channel right.\n"
+            "6. **How I know it's right:** I built the data myself with the answer key, so every number can be checked."))
+
+    def ideia(n, titulo_pt, titulo_en, pt, en, aqui_pt, aqui_en):
+        with st.container(border=True):
+            st.markdown(f"#### {n}. " + T(titulo_pt, titulo_en))
+            st.markdown(T(pt, en))
+            st.caption(T("No Prisma: ", "In Prisma: ") + T(aqui_pt, aqui_en))
+
+    ideia(1, "Dividir a jarra de limonada", "Splitting the lemonade jug",
+          "Sua loja vendeu **100 copos** no sábado. Uma parte veio do **cartaz na esquina**, outra do **panfleto**, outra do **Instagram**. "
+          "E muita gente compraria de qualquer jeito, porque estava calor e passava gente na rua. "
+          "O MMM é a conta que diz **quantos copos vieram de cada coisa**.",
+          "Your stand sold **100 cups** on Saturday. Some came from the **sign on the corner**, some from the **flyer**, some from **Instagram**. "
+          "And plenty of people would have bought anyway, because it was hot and people were walking by. "
+          "MMM is the calculation that says **how many cups came from each thing**.",
+          "os 100 copos são as novas contas (ou a receita) de cada semana, e os cartazes são os 6 canais de mídia.",
+          "the 100 cups are the new accounts (or revenue) each week, and the signs are the 6 media channels.")
+    _fig = go.Figure()
+    for _n, _v, _c in [(T("De qualquer jeito (baseline)", "Anyway (baseline)"), 60, CINZA), (T("Cartaz", "Sign"), 20, AZUL_ESC),
+                       (T("Panfleto", "Flyer"), 12, AZUL), (T("Instagram", "Instagram"), 8, AZUL_CLARO)]:
+        _fig.add_trace(go.Bar(y=[T("Sábado", "Saturday")], x=[_v], name=_n, orientation="h", marker_color=_c,
+                              text=[f"{_v} " + T("copos", "cups")], textposition="inside"))
+    _fig.update_layout(barmode="stack", title=T("Os 100 copos de sábado, divididos", "Saturday's 100 cups, split up"),
+                       legend=dict(orientation="h", y=-0.4), xaxis_title=T("copos", "cups"))
+    mostrar(_fig, 220)
+
+    ideia(2, "O que vende sozinho (baseline)", "What sells on its own (baseline)",
+          "Se você tirasse **todos** os cartazes, ainda venderia limonada: gente com sede, dia quente, clientes fiéis. "
+          "Isso é o **baseline**: o que acontece sem propaganda nenhuma.",
+          "If you took down **every** sign, you would still sell lemonade: thirsty people, a hot day, loyal customers. "
+          "That is the **baseline**: what happens with no advertising at all.",
+          "o baseline é a maior fatia nos dois KPIs, e a aba de cada modelo mostra o tamanho dele com intervalo.",
+          "the baseline is the biggest slice in both KPIs, and each model's tab shows its size with an interval.")
+
+    ideia(3, "Coisas que não são propaganda (controles)", "Things that are not advertising (controls)",
+          "Num dia de **feriado** a rua esvazia; num dia de **promoção** (limonada pela metade do preço) vende mais. "
+          "Se você não contar isso, vai achar que o cartaz falhou no feriado ou que brilhou no dia da promoção. "
+          "Os **controles** são essas coisas que mexem nas vendas mas não são propaganda.",
+          "On a **holiday** the street empties; on a **promo** day (half-price lemonade) you sell more. "
+          "If you don't account for that, you'll think the sign failed on the holiday or shone on promo day. "
+          "**Controls** are those things that move sales but aren't advertising.",
+          "os controles são desemprego, inflação (IPCA), feriados, Black Friday, sazonalidade do ano e o desconto médio das promoções.",
+          "the controls are unemployment, inflation (IPCA), holidays, Black Friday, yearly seasonality and the average promo discount.")
+
+    ideia(4, "Propaganda tem memória (adstock)", "Advertising has a memory (adstock)",
+          "Você viu o cartaz na segunda e só comprou na quinta. O efeito do cartaz **não acaba no dia**: vai diminuindo aos poucos, "
+          "como o cheiro de bolo que fica na cozinha depois que ele sai do forno.",
+          "You saw the sign on Monday and only bought on Thursday. The sign's effect **doesn't end that day**: it fades little by little, "
+          "like the smell of cake that lingers in the kitchen after it leaves the oven.",
+          "cada canal tem um ritmo de \"esquecimento\" diferente; o YouTube, por exemplo, é lembrado por mais tempo que Afiliados.",
+          "each channel fades at its own pace; YouTube, for example, is remembered longer than Affiliates.")
+
+    ideia(5, "O décimo cartaz não ajuda tanto (saturação)", "The tenth sign doesn't help as much (saturation)",
+          "O **primeiro** cartaz na rua chama muita gente. O **segundo** ainda ajuda. O **décimo** cartaz na mesma rua quase não traz ninguém novo: "
+          "quem ia ver já viu. É como pizza: a primeira fatia é ótima, a quinta nem tanto.",
+          "The **first** sign on the street brings in lots of people. The **second** still helps. The **tenth** sign on the same street brings almost no one new: "
+          "everyone who was going to see it already has. It's like pizza: the first slice is great, the fifth not so much.",
+          "é a curva de resposta de cada canal, que sobe rápido e depois achata; é por isso que dobrar a verba não dobra o resultado.",
+          "it's each channel's response curve, which rises fast and then flattens; that's why doubling the budget doesn't double the result.")
+
+    ideia(6, "Retorno médio e retorno do próximo real", "Average return and the next real's return",
+          "Se 10 cartazes trouxeram 50 copos, a **média** é 5 copos por cartaz. Mas o **próximo** cartaz (o 11º) talvez traga só 1. "
+          "Para decidir se vale pôr mais um, o que importa é o próximo, não a média.",
+          "If 10 signs brought 50 cups, the **average** is 5 cups per sign. But the **next** sign (the 11th) might bring only 1. "
+          "To decide whether to add one more, what matters is the next one, not the average.",
+          "é o ROI (média) e o ROI marginal (próximo real); quando o marginal fica bem abaixo da média, o canal está saturado.",
+          "that's ROI (average) and marginal ROI (next real); when marginal falls well below average, the channel is saturated.")
+
+    ideia(7, "Acertar o placar não diz quem fez o gol", "Getting the score right doesn't tell you who scored",
+          "Você pode adivinhar que seu time ganhou de **3 a 0** e acertar em cheio, mas dizer que os três gols foram do goleiro. "
+          "O placar está certo, a história está errada. Com o modelo é igual: ele pode acertar o total de vendas e errar **de onde** elas vieram.",
+          "You can guess your team won **3–0** and be spot on, but say all three goals came from the goalkeeper. "
+          "The score is right, the story is wrong. Models are the same: they can get total sales right and get **where** they came from wrong.",
+          f"o modelo ingênuo de novas contas errava pouco no total (MAPE baixo), mas dava ~{pct(_gs_ing,0)} das contas ao Google Search, "
+          f"quando o certo é ~{pct(_gs_v,0)}.",
+          f"the naive new-accounts model had a small total error (low MAPE), but gave ~{pct(_gs_ing,0)} of accounts to Google Search, "
+          f"when the right answer is ~{pct(_gs_v,0)}.")
+
+    ideia(8, "Quando duas coisas sempre andam juntas", "When two things always move together",
+          "Você sempre pendura o cartaz **no mesmo dia** da promoção. As vendas sobem. Foi o cartaz ou a promoção? "
+          "Olhando só os números, não dá para saber: os dois aconteceram juntos. É como o galo que canta toda manhã: ele não faz o sol nascer.",
+          "You always put up the sign **on the same day** as the promo. Sales go up. Was it the sign or the promo? "
+          "Looking only at the numbers, you can't tell: they happened together. It's like the rooster that crows every morning: it doesn't make the sun rise.",
+          f"o Meta aumenta junto com as promoções e a Black Friday, então o modelo dá a ele um pouco do crédito da promoção: "
+          f"estima ROI de {num(_meta_est,1)}, e o verdadeiro é {num(_meta_v,1)}.",
+          f"Meta goes up together with promos and Black Friday, so the model gives it some of the promo's credit: "
+          f"it estimates an ROI of {num(_meta_est,1)}, and the true one is {num(_meta_v,1)}.")
+
+    ideia(9, "Tirar a dúvida desligando o cartaz (experimento)", "Settling it by taking the sign down (experiment)",
+          "Para saber de verdade quanto o cartaz vende, você **tira o cartaz** por algumas semanas, **sem mudar mais nada**, e compara. "
+          "A diferença é o efeito do cartaz, sem confusão com a promoção. Depois você conta isso para o modelo, como uma **dica confiável**.",
+          "To really know how much the sign sells, you **take it down** for a few weeks, **changing nothing else**, and compare. "
+          "The difference is the sign's effect, with no promo mix-up. Then you tell the model, like a **trusted hint**.",
+          "a aba *Calibração com experimento* faz exatamente isso com o Meta e mostra o antes e o depois.",
+          "the *Calibrating with an experiment* tab does exactly this with Meta and shows the before and after.")
+
+    ideia(10, "Regar de uma vez ou aos poucos?", "Water all at once or a little at a time?",
+          "Se você joga **um balde inteiro** na planta de uma vez, quase tudo escorre. Um **copo por dia** a planta aproveita. "
+          "Com propaganda é parecido: concentrar toda a verba numa semana satura o canal, e boa parte do dinheiro \"escorre\".",
+          "If you pour **a whole bucket** on a plant at once, most of it runs off. **A glass a day** the plant actually uses. "
+          "Advertising is similar: putting the whole budget into one week saturates the channel, and much of the money \"runs off\".",
+          f"gastar a verba de um trimestre numa semana só rende ~{pct(_bomba,0)} do que rende espalhando igual pelas 13 semanas.",
+          f"spending a quarter's budget in a single week yields ~{pct(_bomba,0)} of what spreading it evenly over 13 weeks does.")
+
+    ideia(11, "Prova com gabarito", "A test with the answer key",
+          "Na vida real ninguém sabe a resposta certa: não dá para corrigir o modelo. Aqui eu **inventei os dados** e escrevi o gabarito antes, "
+          "como um professor que prepara a prova. Assim dá para ver **onde o modelo acerta e onde erra**.",
+          "In real life nobody knows the right answer: you can't grade the model. Here I **made up the data** and wrote the answer key first, "
+          "like a teacher preparing an exam. That way you can see **where the model gets it right and where it doesn't**.",
+          "a aba *Verdade vs. estimado* coloca o gabarito ao lado de cada número do modelo.",
+          "the *Ground truth vs. estimated* tab puts the answer key next to every number from the model.")
+
+    ideia(12, "\"Entre 5 e 13\" (intervalo)", "\"Between 5 and 13\" (interval)",
+          "A previsão do tempo não diz \"vai fazer 27 graus\"; diz \"entre 24 e 29\". O modelo faz igual: em vez de um número só, "
+          "dá uma **faixa provável**. Faixa larga = o modelo está em dúvida.",
+          "The weather forecast doesn't say \"it'll be 27 degrees\"; it says \"between 24 and 29\". The model does the same: instead of a single number, "
+          "it gives a **likely range**. A wide range means the model is unsure.",
+          "toda barra com um \"risquinho\" em cima mostra essa faixa (intervalo de 90%).",
+          "every bar with a little whisker on top shows that range (90% interval).")
+
+
+# ================================================================== CALIBRAÇÃO COM EXPERIMENTO
+with abas[12]:
+    st.markdown(T(
+        "**O problema:** o modelo só observa o passado. Quando um canal sempre sobe junto com outra coisa (promoção, Black Friday, demanda), "
+        "ele não consegue separar quem causou o quê, e um canal leva crédito que não é dele. Ajustar priors \"até fazer sentido\" ajuda, "
+        "mas corre o risco de o modelo só devolver o que a gente já acreditava.\n\n"
+        "**A solução:** um **experimento** (lift test). Desliga-se o canal por algumas semanas, sem mudar mais nada, e mede-se o que deixou de acontecer. "
+        "Esse ROI medido entra no Meridian como **prior de ROI** daquele canal: uma evidência causal independente, não uma opinião. "
+        f"Documentação: {link('ROI priors e calibração', DOCS['roi_priors'])}.",
+        "**The problem:** the model only observes the past. When a channel always rises together with something else (promos, Black Friday, demand), "
+        "it can't tell who caused what, and a channel takes credit that isn't its own. Tuning priors \"until it makes sense\" helps, "
+        "but risks the model simply returning what we already believed.\n\n"
+        "**The fix:** an **experiment** (lift test). Switch the channel off for a few weeks, changing nothing else, and measure what stopped happening. "
+        "That measured ROI goes into Meridian as that channel's **ROI prior**: independent causal evidence, not an opinion. "
+        f"Docs: {link('ROI priors and calibration', DOCS['roi_priors'])}."))
+    kc = st.radio("KPI", ["contas", "receita"], format_func=KPI_FMT, horizontal=True, key="cal_kpi")
+    nc = f"calib_{kc}"
+    if not os.path.exists(os.path.join(RES, f"retorno_{nc}.csv")):
+        st.warning(T("Resultados da calibração ainda não exportados: rode `calibrar.py`.", "Calibration results not exported yet: run `calibrar.py`."))
+    else:
+        ex = ler(f"experimento_{kc}.csv").iloc[0]; cx = ex["canal"]
+        r0 = ler(f"retorno_{kc}.csv").set_index("canal"); r1 = ler(f"retorno_{nc}.csv").set_index("canal")
+        a0, a1 = ler(f"acc_{kc}.csv").iloc[0], ler(f"acc_{nc}.csv").iloc[0]
+        e0, _ = erro_atribuicao(kc); e1, _ = erro_atribuicao(nc)
+        ok = lambda r: int(((r["contrib_lo"] <= r["contrib_verdade"]) & (r["contrib_verdade"] <= r["contrib_hi"])).sum())
+        u_roi = T("contas por R$ mil", "accounts per R$ 1k") if kc == "contas" else T("R$ por R$ 1", "R$ per R$ 1")
+
+        st.markdown(T("### 1. O experimento (simulado)", "### 1. The experiment (simulated)"))
+        st.markdown(T(
+            f"Canal testado: **{NOMES[cx]}**, o que o modelo ajustado mais errava neste KPI. Desliguei o canal nas semanas "
+            f"**{int(ex['semana_ini'])+1} a {int(ex['semana_fim'])+1}** (R$ {num(ex['verba_mil'],1)} mil a menos) e contei o efeito perdido nessas semanas "
+            f"e nas 8 seguintes (a \"memória\" da mídia). Somei um erro de medição de 15%, porque experimento de verdade também tem incerteza.",
+            f"Channel tested: **{NOMES[cx]}**, the one the tuned model got most wrong for this KPI. I switched the channel off in weeks "
+            f"**{int(ex['semana_ini'])+1} to {int(ex['semana_fim'])+1}** (R$ {num(ex['verba_mil'],1)}k less spend) and counted the lost effect in those weeks "
+            f"and the 8 that followed (media's \"memory\"). I added a 15% measurement error, because real experiments are uncertain too."))
+        x1, x2, x3 = st.columns(3)
+        x1.metric(T("ROI medido no experimento", "ROI measured by the experiment"), num(ex["roi_medido"], 2),
+                  help=T(f"Em {u_roi}. Faixa de 95%: {num(ex['ic95_lo'],2)} a {num(ex['ic95_hi'],2)}. Vira o prior de ROI do canal.",
+                         f"In {u_roi}. 95% range: {num(ex['ic95_lo'],2)} to {num(ex['ic95_hi'],2)}. It becomes the channel's ROI prior."))
+        x2.metric(T("ROI verdadeiro do canal (período todo)", "Channel's true ROI (whole period)"), num(r0.loc[cx, "roi_verdade"], 2))
+        x3.metric(T("ROI do modelo sem calibração", "ROI from the uncalibrated model"), num(r0.loc[cx, "roi"], 2))
+
+        st.markdown(T("### 2. Antes e depois", "### 2. Before and after"))
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric(T(f"ROI do {NOMES[cx]}", f"{NOMES[cx]} ROI"), num(r1.loc[cx, "roi"], 2),
+                  delta=num(r1.loc[cx, "roi"] - r0.loc[cx, "roi"], 2, sign=True), delta_color="off",
+                  help=T(f"Antes: {num(r0.loc[cx,'roi'],2)}. Verdade: {num(r0.loc[cx,'roi_verdade'],2)}.",
+                         f"Before: {num(r0.loc[cx,'roi'],2)}. Ground truth: {num(r0.loc[cx,'roi_verdade'],2)}."))
+        m2.metric(T("Erro de atribuição", "Attribution error"), f"{num(e1,1)} p.p.", delta=f"{num(e1 - e0,1,sign=True)} p.p.", delta_color="inverse",
+                  help=T("Média, nos 6 canais, da diferença entre contribuição estimada e verdadeira.",
+                         "Average, across the 6 channels, of the gap between estimated and true contribution."))
+        m3.metric(T("Canais com a verdade no IC 90%", "Channels with truth inside 90% CI"), f"{ok(r1)} / 6", delta=ok(r1) - ok(r0))
+        m4.metric(T("MAPE no teste", "Test MAPE"), pct(a1["mape_teste"] * 100), delta=f"{num((a1['mape_teste'] - a0['mape_teste'])*100,1,sign=True)} p.p.",
+                  delta_color="inverse")
+
+        tb = pd.DataFrame({
+            "": [T("Sem calibração (ajustado)", "Uncalibrated (tuned)"), T("Calibrado com experimento", "Calibrated with experiment"), T("Verdade", "Ground truth")],
+            T(f"ROI {NOMES[cx]} (IC 90%)", f"{NOMES[cx]} ROI (90% CI)"): [
+                f"{num(r0.loc[cx,'roi'],2)} ({num(r0.loc[cx,'roi_lo'],2)} {T('a','to')} {num(r0.loc[cx,'roi_hi'],2)})",
+                f"{num(r1.loc[cx,'roi'],2)} ({num(r1.loc[cx,'roi_lo'],2)} {T('a','to')} {num(r1.loc[cx,'roi_hi'],2)})",
+                num(r0.loc[cx, "roi_verdade"], 2)],
+            T(f"Contribuição {NOMES[cx]} (% do KPI)", f"{NOMES[cx]} contribution (% of KPI)"): [
+                pct(r0.loc[cx, "contrib_pct"]), pct(r1.loc[cx, "contrib_pct"]), pct(r0.loc[cx, "contrib_verdade"])],
+            T("Erro de atribuição (p.p.)", "Attribution error (p.p.)"): [num(e0, 1), num(e1, 1), "0"],
+            T("Canais com verdade no IC", "Channels with truth in CI"): [f"{ok(r0)}/6", f"{ok(r1)}/6", "—"],
+            T("MAPE teste", "Test MAPE"): [pct(a0["mape_teste"] * 100), pct(a1["mape_teste"] * 100), "—"]})
+        st.table(tb)
+
+        xs = [NOMES[c] for c in CANAIS]
+        f = make_subplots(rows=1, cols=2, subplot_titles=[T("ROI por canal", "ROI by channel"), T("Contribuição (% do KPI)", "Contribution (% of KPI)")])
+        for j, (col, lo, hi) in enumerate([("roi", "roi_lo", "roi_hi"), ("contrib_pct", "contrib_lo", "contrib_hi")]):
+            vcol = "roi_verdade" if col == "roi" else "contrib_verdade"
+            for r_, nm, cor in [(r0, T("sem calibração", "uncalibrated"), AZUL_CLARO), (r1, T("calibrado", "calibrated"), AZUL)]:
+                f.add_trace(go.Bar(x=xs, y=[r_.loc[c, col] for c in CANAIS], name=nm, marker_color=cor, showlegend=(j == 0),
+                                   error_y=dict(type="data", symmetric=False, array=[r_.loc[c, hi] - r_.loc[c, col] for c in CANAIS],
+                                                arrayminus=[r_.loc[c, col] - r_.loc[c, lo] for c in CANAIS])), 1, j + 1)
+            f.add_trace(go.Scatter(x=xs, y=[r0.loc[c, vcol] for c in CANAIS], mode="markers", name=T("verdade", "ground truth"),
+                                   marker=dict(color=LARANJA, size=11, symbol="diamond"), showlegend=(j == 0)), 1, j + 1)
+        f.update_layout(barmode="group", legend=dict(orientation="h", y=-0.25), height=420)
+        mostrar(f)
+        outros = [c for c in CANAIS if c != cx]
+        mov = max(outros, key=lambda c: abs(r1.loc[c, "contrib_pct"] - r0.loc[c, "contrib_pct"]))
+        st.caption(T(
+            f"Repare que não muda só o canal testado: o crédito que o {NOMES[cx]} perdeu foi redistribuído. Quem mais mudou foi {NOMES[mov]} "
+            f"({pct(r0.loc[mov,'contrib_pct'])} → {pct(r1.loc[mov,'contrib_pct'])}; verdade {pct(r0.loc[mov,'contrib_verdade'])}).",
+            f"Note that it's not only the tested channel that changes: the credit {NOMES[cx]} lost was redistributed. The channel that moved most was {NOMES[mov]} "
+            f"({pct(r0.loc[mov,'contrib_pct'])} → {pct(r1.loc[mov,'contrib_pct'])}; ground truth {pct(r0.loc[mov,'contrib_verdade'])})."))
+
+        # ---- a decisão de verba muda?
+        st.markdown(T("### 3. E a decisão de verba, melhora?", "### 3. Does the budget decision improve?"))
+        def _aloc(nome_curva):
+            cv = ler(f"curvas_{nome_curva}.csv"); Nn = len(df)
+            G2 = {c: cv[cv["canal"] == c].sort_values("multiplicador") for c in CANAIS}
+            atual = {c: float(G2[c].loc[(G2[c]["multiplicador"] - 1).abs().idxmin(), "gasto_mil"]) / Nn for c in CANAIS}
+            resp = lambda c, g, col="est": float(np.interp(g * Nn, G2[c]["gasto_mil"], G2[c][col])) / Nn
+            X = sum(atual.values()); passo = X / 500; g = {c: 0.0 for c in CANAIS}
+            for _ in range(500):
+                mel, gm = None, -1
+                for c in CANAIS:
+                    if g[c] + passo > 3 * atual[c]: continue
+                    gan = resp(c, g[c] + passo) - resp(c, g[c])
+                    if gan > gm: mel, gm = c, gan
+                if mel is None: break
+                g[mel] += passo
+            tot = lambda a_, col: sum(resp(c, a_[c], col) for c in CANAIS)
+            return tot(g, "est") - tot(atual, "est"), tot(g, "verdade") - tot(atual, "verdade"), g, atual
+        d0e, d0v, g0, at = _aloc(kc); d1e, d1v, g1, _ = _aloc(nc)
+        un = KPIS[kc]["unidade"]
+        st.markdown(T(
+            "Com a **mesma verba semanal**, o otimizador redistribui entre os canais usando as curvas de cada modelo. "
+            "Depois confiro o ganho nas curvas **verdadeiras**.",
+            "With the **same weekly budget**, the optimizer reallocates across channels using each model's curves. "
+            "Then I check the gain on the **true** curves."))
+        st.table(pd.DataFrame({
+            "": [T("Sem calibração", "Uncalibrated"), T("Calibrado", "Calibrated")],
+            T(f"Ganho prometido pelo modelo ({un}/sem)", f"Gain promised by the model ({un}/wk)"): [num(d0e, 0, sign=True), num(d1e, 0, sign=True)],
+            T(f"Ganho real, nas curvas verdadeiras ({un}/sem)", f"Real gain, on the true curves ({un}/wk)"): [num(d0v, 0, sign=True), num(d1v, 0, sign=True)],
+            T(f"Verba sugerida no {NOMES[cx]} (x o atual)", f"Suggested {NOMES[cx]} budget (x current)"): [
+                f"{num(g0[cx]/at[cx],2)}x", f"{num(g1[cx]/at[cx],2)}x"]}))
+        if d0v > 0 and abs(d1v - d0v) <= 0.1 * abs(d0v):
+            st.info(T(f"Aqui a realocação já ganhava antes ({num(d0v,0,sign=True)} {un}/semana na verdade) e continua igual ({num(d1v,0,sign=True)}): a calibração corrige a atribuição sem mudar a decisão.",
+                      f"Here the reallocation already won before ({num(d0v,0,sign=True)} {un}/week on the ground truth) and stays the same ({num(d1v,0,sign=True)}): calibration fixes attribution without changing the decision."))
+        elif d1v > d0v:
+            st.success(T(f"A calibração melhora a decisão: a realocação sugerida passa de {num(d0v,0,sign=True)} para {num(d1v,0,sign=True)} {un}/semana na verdade.",
+                         f"Calibration improves the decision: the suggested reallocation goes from {num(d0v,0,sign=True)} to {num(d1v,0,sign=True)} {un}/week on the ground truth."))
+        else:
+            st.info(T("Neste KPI a calibração corrige a atribuição, mas a realocação ainda não ganha nas curvas verdadeiras: outros canais seguem com curvas incertas.",
+                      "For this KPI calibration fixes attribution, but the reallocation still doesn't win on the true curves: other channels still have uncertain curves."))
+
+        st.markdown(T("### 4. O que aprender com isso", "### 4. Takeaways"))
+        janela_dif = abs(ex["roi_janela_real"] - r0.loc[cx, "roi_verdade"]) / r0.loc[cx, "roi_verdade"] > 0.10
+        st.markdown(T(
+            f"- **O MAPE quase não muda** ({pct(a0['mape_teste']*100)} → {pct(a1['mape_teste']*100)}), mas a atribuição muda bastante. "
+            "O erro de previsão não percebe esse tipo de problema; só uma evidência causal corrige.\n"
+            "- **Um experimento em um canal arruma mais de um canal**, porque o crédito que sai do canal superestimado vai para quem estava subestimado.\n"
+            + (f"- **O experimento mede o ROI daquele momento.** Nas semanas do teste, o ROI real do {NOMES[cx]} era {num(ex['roi_janela_real'],2)}, "
+               f"diferente da média do período ({num(r0.loc[cx,'roi_verdade'],2)}), porque o nível de investimento e a saturação mudam. "
+               "Por isso o resultado chega perto da verdade, mas não exatamente nela. Na prática, vale repetir testes em épocas diferentes.\n" if janela_dif else
+               f"- **O experimento mede o ROI daquele momento.** Aqui o ROI das semanas do teste ({num(ex['roi_janela_real'],2)}) ficou perto da média do período "
+               f"({num(r0.loc[cx,'roi_verdade'],2)}), mas nem sempre é assim: nível de investimento e saturação mudam ao longo do ano.\n")
+            + "- **No projeto original eu calibrei com conhecimento de negócio** (priors informativos). Este é o passo seguinte: calibrar com experimento.",
+            f"- **MAPE barely changes** ({pct(a0['mape_teste']*100)} → {pct(a1['mape_teste']*100)}), but attribution changes a lot. "
+            "Prediction error can't see this kind of problem; only causal evidence fixes it.\n"
+            "- **An experiment on one channel fixes more than one channel**, because the credit leaving the overestimated channel goes to the underestimated ones.\n"
+            + (f"- **The experiment measures the ROI of that moment.** During the test weeks, {NOMES[cx]}'s true ROI was {num(ex['roi_janela_real'],2)}, "
+               f"different from the period average ({num(r0.loc[cx,'roi_verdade'],2)}), because spend level and saturation change. "
+               "That's why the result gets close to the truth but not exactly on it. In practice, repeat tests at different times of year.\n" if janela_dif else
+               f"- **The experiment measures the ROI of that moment.** Here the test weeks' ROI ({num(ex['roi_janela_real'],2)}) was close to the period average "
+               f"({num(r0.loc[cx,'roi_verdade'],2)}), but that isn't always true: spend level and saturation change over the year.\n")
+            + "- **In the original project I calibrated with business knowledge** (informative priors). This is the next step: calibrating with an experiment."))
