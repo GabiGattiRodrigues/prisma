@@ -1496,20 +1496,180 @@ with abas[12]:
         ok = lambda r: int(((r["contrib_lo"] <= r["contrib_verdade"]) & (r["contrib_verdade"] <= r["contrib_hi"])).sum())
         u_roi = T("contas por R$ mil", "accounts per R$ 1k") if kc == "contas" else T("R$ por R$ 1", "R$ per R$ 1")
 
-        st.markdown(T("### 1. O experimento (simulado)", "### 1. The experiment (simulated)"))
+        rr = ler(f"retorno_{kc}.csv").set_index("canal")
+        gap_roi = (rr["roi"] / rr["roi_verdade"] - 1) * 100
+        fora = [c for c in CANAIS if not (rr.loc[c, "contrib_lo"] <= rr.loc[c, "contrib_verdade"] <= rr.loc[c, "contrib_hi"])]
+        gastos = {c: df[f"gasto_{c}"].sum() for c in CANAIS}; share = gastos[cx] / sum(gastos.values()) * 100
+        corr_desc = df[f"gasto_{cx}"].corr(df["desconto_medio_pct"]); corr_bf = df[f"gasto_{cx}"].corr(df["black_friday"])
+        semanal = df[f"gasto_{cx}"].mean()
+        prior_faixa = (1, 25) if kc == "contas" else (0.3, 8)
+
+        st.markdown(T("### 1. O experimento, passo a passo", "### 1. The experiment, step by step"))
+
+        st.markdown(T(f"#### 1.1 Por que testar o {NOMES[cx]}?", f"#### 1.1 Why test {NOMES[cx]}?"))
         st.markdown(T(
-            f"Canal testado: **{NOMES[cx]}**, o que o modelo ajustado mais errava neste KPI. Desliguei o canal nas semanas "
-            f"**{int(ex['semana_ini'])+1} a {int(ex['semana_fim'])+1}** (R$ {num(ex['verba_mil'],1)} mil a menos) e contei o efeito perdido nessas semanas "
-            f"e nas 8 seguintes (a \"memória\" da mídia). Somei um erro de medição de 15%, porque experimento de verdade também tem incerteza.",
-            f"Channel tested: **{NOMES[cx]}**, the one the tuned model got most wrong for this KPI. I switched the channel off in weeks "
-            f"**{int(ex['semana_ini'])+1} to {int(ex['semana_fim'])+1}** (R$ {num(ex['verba_mil'],1)}k less spend) and counted the lost effect in those weeks "
-            f"and the 8 that followed (media's \"memory\"). I added a 15% measurement error, because real experiments are uncertain too."))
-        x1, x2, x3 = st.columns(3)
-        x1.metric(T("ROI medido no experimento", "ROI measured by the experiment"), num(ex["roi_medido"], 2),
-                  help=T(f"Em {u_roi}. Faixa de 95%: {num(ex['ic95_lo'],2)} a {num(ex['ic95_hi'],2)}. Vira o prior de ROI do canal.",
-                         f"In {u_roi}. 95% range: {num(ex['ic95_lo'],2)} to {num(ex['ic95_hi'],2)}. It becomes the channel's ROI prior."))
-        x2.metric(T("ROI verdadeiro do canal (período todo)", "Channel's true ROI (whole period)"), num(r0.loc[cx, "roi_verdade"], 2))
-        x3.metric(T("ROI do modelo sem calibração", "ROI from the uncalibrated model"), num(r0.loc[cx, "roi"], 2))
+            "Na vida real ninguém tem o gabarito, então a escolha do canal usa sinais que qualquer time tem em mãos. "
+            f"O {NOMES[cx]} juntava os três:\n\n"
+            f"- **É onde está o dinheiro.** {pct(share,0)} de toda a verba de mídia (cerca de R$ {num(semanal,0)} mil por semana). "
+            "Errar o retorno dele custa mais do que errar o de um canal pequeno.\n"
+            f"- **Anda junto com outra coisa.** O investimento nele sobe com as promoções (correlação de {num(corr_desc,2)}) e com a Black Friday ({num(corr_bf,2)}). "
+            "Quando duas coisas sobem juntas, o modelo não sabe a quem dar o crédito.\n"
+            f"- **O número parece bom demais.** O modelo deu ROI de {num(rr.loc[cx,'roi'],1)} {u_roi}, alto para um canal desse tamanho, que normalmente já está mais saturado.\n\n"
+            f"**E o gabarito confirma:** o {NOMES[cx]} é {'o único canal' if fora == [cx] else 'um dos canais'} cuja contribuição verdadeira ficou **fora** do intervalo de 90% do modelo, "
+            f"com ROI {num(gap_roi[cx],0)}% acima do real.",
+            "In real life nobody has the answer key, so choosing the channel relies on signals any team has at hand. "
+            f"{NOMES[cx]} had all three:\n\n"
+            f"- **It's where the money is.** {pct(share,0)} of all media spend (about R$ {num(semanal,0)}k per week). "
+            "Getting its return wrong costs more than getting a small channel wrong.\n"
+            f"- **It moves together with something else.** Spend on it rises with promotions (correlation of {num(corr_desc,2)}) and Black Friday ({num(corr_bf,2)}). "
+            "When two things rise together, the model can't tell which one deserves the credit.\n"
+            f"- **The number looks too good.** The model gave it an ROI of {num(rr.loc[cx,'roi'],1)} {u_roi}, high for a channel this size, which is usually more saturated.\n\n"
+            f"**And the answer key confirms it:** {NOMES[cx]} is {'the only channel' if fora == [cx] else 'one of the channels'} whose true contribution fell **outside** the model's 90% interval, "
+            f"with ROI {num(gap_roi[cx],0)}% above the real one."))
+
+        st.markdown(T("#### 1.2 Como o experimento foi simulado", "#### 1.2 How the experiment was simulated"))
+        st.markdown(T(
+            f"1. Escolhi **6 semanas** no meio do histórico (semanas {int(ex['semana_ini'])+1} a {int(ex['semana_fim'])+1}), longe da Black Friday e do período de teste do modelo.\n"
+            f"2. Calculei, com a fórmula do gerador, quantas {('contas' if kc=='contas' else 'R$ mil de receita')} **deixariam de existir** se o {NOMES[cx]} fosse desligado nessas semanas. "
+            "Contei as 6 semanas e mais **8 semanas depois**, porque a propaganda tem memória: quem viu o anúncio ainda compra depois que ele sai do ar.\n"
+            f"3. Dividi esse efeito pela verba que deixou de ser gasta (R$ {num(ex['verba_mil'],1)} mil). Isso é o **ROI medido pelo teste**.\n"
+            "4. Somei um **erro de medição** (próximo item), porque um teste real nunca devolve o número exato.\n\n"
+            f"Resultado: o teste mediu ROI de **{num(ex['roi_medido'],2)}**, com faixa de 95% entre {num(ex['ic95_lo'],2)} e {num(ex['ic95_hi'],2)}.",
+            f"1. I picked **6 weeks** in the middle of the history (weeks {int(ex['semana_ini'])+1} to {int(ex['semana_fim'])+1}), away from Black Friday and from the model's test period.\n"
+            f"2. Using the generator's formula, I computed how many {('accounts' if kc=='contas' else 'R$ k of revenue')} **would disappear** if {NOMES[cx]} were switched off in those weeks. "
+            "I counted those 6 weeks plus **8 weeks after**, because advertising has a memory: people who saw the ad still buy after it goes off air.\n"
+            f"3. I divided that effect by the spend that wasn't made (R$ {num(ex['verba_mil'],1)}k). That is the **ROI measured by the test**.\n"
+            "4. I added a **measurement error** (next item), because a real test never returns the exact number.\n\n"
+            f"Result: the test measured an ROI of **{num(ex['roi_medido'],2)}**, with a 95% range from {num(ex['ic95_lo'],2)} to {num(ex['ic95_hi'],2)}."))
+
+        # ---- exemplo em números: como o "desligar" vira ROI e o ROI vira prior
+        st.markdown(T("#### Exemplo em números: se o canal foi desligado, de onde sai o ROI?",
+                      "#### Worked example: if the channel was switched off, where does the ROI come from?"))
+        st.markdown(T(
+            "O ROI do teste não vem das semanas desligadas sozinhas, vem da **comparação**: o que aconteceu **sem** o canal versus o que teria acontecido **com** ele. "
+            "A diferença é o que o canal estava trazendo. É como fechar a barraca de limonada da esquina por um mês e ver quantos copos a loja deixa de vender: "
+            "os copos que sumiram eram da barraca.\n\n"
+            "**Na vida real**, a comparação é entre regiões: em algumas o canal fica desligado (teste), em outras parecidas ele continua ligado (controle). "
+            "O controle mostra o que teria acontecido se nada tivesse mudado. **Aqui**, como o dado é sintético, calculo as duas versões com a fórmula do gerador.",
+            "The test's ROI doesn't come from the switched-off weeks alone, it comes from a **comparison**: what happened **without** the channel versus what would have happened **with** it. "
+            "The difference is what the channel was bringing in. It's like closing the corner lemonade stand for a month and seeing how many cups the shop stops selling: "
+            "the missing cups belonged to the stand.\n\n"
+            "**In real life**, the comparison is between regions: in some the channel is switched off (test), in similar ones it stays on (control). "
+            "The control shows what would have happened if nothing had changed. **Here**, since the data is synthetic, I compute both versions with the generator's formula."))
+        _p = V[KPIS[kc]["chave"]]["canais"][cx]; _g = df[f"gasto_{cx}"].values.astype(float); _m = _g.mean()
+        def _ad(x, dec, L=8):
+            w = dec ** np.arange(L); w = w / w.sum(); o = np.zeros(len(x))
+            for t_ in range(len(x)):
+                for l_ in range(L):
+                    if t_ - l_ >= 0: o[t_] += w[l_] * x[t_ - l_]
+            return o
+        _c = lambda gg: _p["beta"] * (lambda z: z ** _p["slope"] / (z ** _p["slope"] + _p["ec"] ** _p["slope"]))(_ad(gg / _m, _p["decay"]))
+        _off = _g.copy(); a_, b_ = int(ex["semana_ini"]), int(ex["semana_fim"]) + 1; _off[a_:b_] = 0
+        _dif = _c(_g) - _c(_off)
+        dur, dep = _dif[a_:b_].sum(), _dif[b_:b_ + 8].sum()
+        un_k = ("contas" if kc == "contas" else "R$ mil") if LANG == "PT" else ("accounts" if kc == "contas" else "R$ k")
+        sem_x = list(range(a_ + 1, b_ + 9))
+        fx = go.Figure(go.Bar(x=sem_x, y=_dif[a_:b_ + 8], marker_color=[AZUL] * (b_ - a_) + [AZUL_CLARO] * 8,
+                              text=[num(v, 0) for v in _dif[a_:b_ + 8]], textposition="outside"))
+        fx.update_layout(title=T(f"{un_k} perdidas por semana com o {NOMES[cx]} desligado (escuro = semanas desligado; claro = efeito que continuaria depois)",
+                                 f"{un_k} lost per week with {NOMES[cx]} off (dark = weeks off; light = effect that would have continued afterwards)"),
+                         xaxis_title=T("semana", "week"), yaxis_title=un_k, title_font_size=13)
+        mostrar(fx, 340)
+        _gw = _g[a_:b_]; _imax = int(np.argmax(_gw))
+        if _gw[_imax] > 2 * np.median(_gw):
+            st.caption(T(
+                f"Por que uma semana pesa tanto? Nessas semanas o {NOMES[cx]} já estava com pouca verba (cerca de R$ {num(np.median(_gw),0)} mil por semana), "
+                f"menos na semana {a_ + _imax + 1}, que teve R$ {num(_gw[_imax],0)} mil. Desligar uma semana cheia tira muito mais resultado do que desligar uma semana fraca.",
+                f"Why does one week weigh so much? In those weeks {NOMES[cx]} was already on a low budget (about R$ {num(np.median(_gw),0)}k per week), "
+                f"except week {a_ + _imax + 1}, which had R$ {num(_gw[_imax],0)}k. Switching off a full week removes much more than switching off a light one."))
+        z = 1.96; ep = ex["erro_padrao"]
+        passos = pd.DataFrame({
+            T("Passo", "Step"): ["1", "2", "3", "4", "5", "6", "7"],
+            T("O que é", "What it is"): [
+                T(f"Verba que deixou de ser gasta no {NOMES[cx]} nas 6 semanas", f"Spend not made on {NOMES[cx]} over the 6 weeks"),
+                T(f"{un_k} perdidas durante as 6 semanas desligado", f"{un_k} lost during the 6 weeks off"),
+                T(f"{un_k} perdidas nas 8 semanas seguintes (memória da mídia)", f"{un_k} lost in the following 8 weeks (media memory)"),
+                T("ROI real da janela do teste = (2 + 3) ÷ 1", "True ROI of the test window = (2 + 3) ÷ 1"),
+                T("ROI que o teste mediu (o real + o ruído de um teste de verdade)", "ROI the test measured (the true one + real-test noise)"),
+                T("Erro-padrão do teste = 15% do ROI medido", "Test standard error = 15% of measured ROI"),
+                T("Faixa de 95% = ROI medido ± 1,96 × erro-padrão  →  vira o prior", "95% range = measured ROI ± 1.96 × standard error  →  becomes the prior")],
+            T("Conta", "Math"): [
+                f"R$ {num(ex['verba_mil'],1)} {T('mil','k')}",
+                num(dur, 0), num(dep, 0),
+                f"({num(dur,0)} + {num(dep,0)}) ÷ {num(ex['verba_mil'],1)} = {num(ex['roi_janela_real'],2)}",
+                num(ex["roi_medido"], 2),
+                f"0,15 × {num(ex['roi_medido'],2)} = {num(ep,2)}" if LANG == "PT" else f"0.15 × {num(ex['roi_medido'],2)} = {num(ep,2)}",
+                f"{num(ex['roi_medido'],2)} ± {num(z*ep,2)}  =  {num(ex['ic95_lo'],2)} {T('a','to')} {num(ex['ic95_hi'],2)}"]})
+        st.table(passos)
+        st.markdown(T(
+            f"Ou seja: cada R$ 1 mil que deixou de ir para o {NOMES[cx]} custou cerca de {num(ex['roi_medido'],1)} {un_k}. "
+            "No código, a faixa do passo 7 vira o prior com uma linha:",
+            f"In other words: every R$ 1k that didn't go to {NOMES[cx]} cost about {num(ex['roi_medido'],1)} {un_k}. "
+            "In code, the step-7 range becomes the prior in one line:"))
+        _lo_txt = f"{ex['ic95_lo']:.2f}"; _hi_txt = f"{ex['ic95_hi']:.2f}"
+        _fx = f"{prior_faixa[0]}" ; _fy = f"{prior_faixa[1]}"
+        st.code(
+            f"# {T('faixa de 95% de cada canal: só o', '95% range per channel: only')} {cx} {T('muda', 'changes')}\n"
+            f"lo = [{_lo_txt} if c == \"{cx}\" else {_fx} for c in canais]\n"
+            f"hi = [{_hi_txt} if c == \"{cx}\" else {_fy} for c in canais]\n"
+            f"roi_prior = prior_distribution.lognormal_dist_from_range(lo, hi)   # {T('LogNormal com 95% da massa na faixa', 'LogNormal with 95% of its mass in the range')}\n"
+            "spec.ModelSpec(prior=prior_distribution.PriorDistribution(roi_m=roi_prior), ...)",
+            language="python")
+
+        st.markdown(T("#### 1.3 Por que um erro de 15%?", "#### 1.3 Why a 15% error?"))
+        st.markdown(T(
+            "Todo teste tem ruído: as regiões ou pessoas comparadas não são idênticas, a semana tem eventos que ninguém controla, e o efeito da mídia é pequeno perto do total de vendas. "
+            "Por isso o resultado vem com uma margem. Em testes de incrementalidade bem desenhados (algumas semanas, regiões suficientes), "
+            "o erro-padrão costuma ficar **entre 10% e 30% do efeito medido**. Usei **15%**, um teste bem feito mas não perfeito.\n\n"
+            "Essa escolha importa: **quanto menor o erro, mais o modelo confia no teste**. Com 30%, a faixa do prior ficaria duas vezes mais larga e o modelo "
+            "se moveria menos na direção do teste. Com 5%, o teste praticamente decidiria sozinho.",
+            "Every test is noisy: the regions or people being compared aren't identical, the week has events nobody controls, and the media effect is small next to total sales. "
+            "So the result comes with a margin. In well-designed incrementality tests (a few weeks, enough regions), "
+            "the standard error usually lands **between 10% and 30% of the measured effect**. I used **15%**, a well-run but not perfect test.\n\n"
+            "That choice matters: **the smaller the error, the more the model trusts the test**. At 30%, the prior's range would be twice as wide and the model "
+            "would move less toward the test. At 5%, the test would practically decide on its own."))
+
+        st.markdown(T("#### 1.4 Como o teste entrou no modelo (e por que não é \"colar o gabarito\")",
+                      "#### 1.4 How the test went into the model (and why it isn't \"pasting the answer key\")"))
+        st.markdown(T(
+            "O modelo **não recebeu o ROI verdadeiro**. Ele recebeu o que um teste real entregaria: o ROI medido, já com erro, e a faixa de incerteza. "
+            f"No Meridian, isso vira o **prior de ROI** só do {NOMES[cx]}: em vez da faixa genérica de {num(prior_faixa[0],1)} a {num(prior_faixa[1],0)} que todos os canais usavam, "
+            f"o {NOMES[cx]} passou a ter a faixa do teste ({num(ex['ic95_lo'],2)} a {num(ex['ic95_hi'],2)}). Os outros canais ficaram exatamente como estavam.\n\n"
+            "Depois o modelo roda de novo e **combina** essa dica com os dados semanais. Por isso o resultado final "
+            f"({num(r1.loc[cx,'roi'],2)}) não é igual ao do teste ({num(ex['roi_medido'],2)}): é um meio-termo entre o que o teste disse e o que o histórico mostra.\n\n"
+            "Um detalhe honesto: na vida real, as semanas desligadas também apareceriam nos dados que o modelo vê. "
+            "Aqui o histórico ficou igual e só o resultado do teste entrou, como prior.",
+            "The model **did not receive the true ROI**. It received what a real test would deliver: the measured ROI, already with error, and its uncertainty range. "
+            f"In Meridian, that becomes the **ROI prior** for {NOMES[cx]} only: instead of the generic {num(prior_faixa[0],1)} to {num(prior_faixa[1],0)} range every channel used, "
+            f"{NOMES[cx]} got the test's range ({num(ex['ic95_lo'],2)} to {num(ex['ic95_hi'],2)}). The other channels stayed exactly as they were.\n\n"
+            "Then the model runs again and **combines** that hint with the weekly data. That's why the final result "
+            f"({num(r1.loc[cx,'roi'],2)}) isn't the same as the test's ({num(ex['roi_medido'],2)}): it's a compromise between what the test said and what the history shows.\n\n"
+            "An honest detail: in real life, the switched-off weeks would also show up in the data the model sees. "
+            "Here the history stayed the same and only the test result went in, as a prior."))
+        # gráfico: prior genérico x prior do teste x resultado x verdade
+        def _ln(lo, hi, x):
+            mu = (np.log(lo) + np.log(hi)) / 2; sg = (np.log(hi) - np.log(lo)) / (2 * 1.96)
+            return np.exp(-(np.log(x) - mu) ** 2 / (2 * sg ** 2)) / (x * sg * np.sqrt(2 * np.pi))
+        xmax = max(prior_faixa[1] * 0.6, r0.loc[cx, "roi_hi"] * 1.3)
+        xg = np.linspace(xmax / 400, xmax, 400)
+        fp = go.Figure()
+        fp.add_trace(go.Scatter(x=xg, y=_ln(prior_faixa[0], prior_faixa[1], xg), name=T("prior genérico (antes)", "generic prior (before)"),
+                                line=dict(color=CINZA, dash="dot", width=2)))
+        fp.add_trace(go.Scatter(x=xg, y=_ln(max(ex["ic95_lo"], 0.05), ex["ic95_hi"], xg), name=T("prior vindo do teste", "prior from the test"),
+                                line=dict(color=AZUL, width=2.5), fill="tozeroy", fillcolor="rgba(31,95,191,.12)"))
+        ytop = float(_ln(max(ex["ic95_lo"], 0.05), ex["ic95_hi"], xg).max())
+        for val, lo_, hi_, nm, cor, yy in [(r0.loc[cx, "roi"], r0.loc[cx, "roi_lo"], r0.loc[cx, "roi_hi"], T("modelo sem calibração", "uncalibrated model"), AZUL_CLARO, ytop * 1.25),
+                                           (r1.loc[cx, "roi"], r1.loc[cx, "roi_lo"], r1.loc[cx, "roi_hi"], T("modelo calibrado", "calibrated model"), AZUL_ESC, ytop * 1.12)]:
+            fp.add_trace(go.Scatter(x=[val], y=[yy], mode="markers", name=nm, marker=dict(color=cor, size=12),
+                                    error_x=dict(type="data", symmetric=False, array=[hi_ - val], arrayminus=[val - lo_], color=cor)))
+        fp.add_vline(x=r0.loc[cx, "roi_verdade"], line_color=LARANJA, line_dash="dash",
+                     annotation_text=T("verdade", "ground truth"), annotation_position="top")
+        fp.update_layout(title=T(f"ROI do {NOMES[cx]}: o que o modelo sabia antes, a dica do teste e o resultado",
+                                 f"{NOMES[cx]} ROI: what the model knew before, the test's hint and the result"),
+                         xaxis_title=u_roi, yaxis=dict(showticklabels=False, title=None), legend=dict(orientation="h", y=-0.3))
+        mostrar(fp, 380)
+        st.caption(T("Pontos com risquinho = estimativa do modelo e intervalo de 90%. A curva azul é a dica do teste; a pontilhada é o que o modelo usava antes.",
+                     "Dots with whiskers = model estimate and 90% interval. The blue curve is the test's hint; the dotted one is what the model used before."))
 
         st.markdown(T("### 2. Antes e depois", "### 2. Before and after"))
         m1, m2, m3, m4 = st.columns(4)
@@ -1619,3 +1779,53 @@ with abas[12]:
                f"- **The experiment measures the ROI of that moment.** Here the test weeks' ROI ({num(ex['roi_janela_real'],2)}) was close to the period average "
                f"({num(r0.loc[cx,'roi_verdade'],2)}), but that isn't always true: spend level and saturation change over the year.\n")
             + "- **In the original project I calibrated with business knowledge** (informative priors). This is the next step: calibrating with an experiment."))
+
+        # ---- como propor o teste para um cliente
+        st.markdown(T("### 5. E na vida real: como convencer o cliente a testar?", "### 5. In real life: how do you convince the client to test?"))
+        perda_total = ex["efeito_real"]; perda_20 = perda_total * 0.2
+        y_sem = df[KPIS[kc]["chave"]].mean()
+        dif_sem = d1v - d0v
+        if dif_sem > 0.1 * max(abs(d0v), 1):
+            _b_pt = (f"- **Compare o custo do teste com o custo do erro.** Aqui, decidir a verba com o modelo sem calibração dá {num(d0v,0,sign=True)} {un}/semana na verdade; "
+                     f"calibrado, {num(d1v,0,sign=True)}. São ~{num(dif_sem,0)} {un} por semana, ~{num(dif_sem*52,0)} por ano. "
+                     f"Desligar o {NOMES[cx]} em **20% das regiões** por 6 semanas custaria ~{num(perda_20,0)} {un}, uma vez só "
+                     f"(menos de {pct(perda_20 / y_sem * 100, 0)} de uma semana de resultado).\n")
+            _b_en = (f"- **Compare the cost of the test with the cost of being wrong.** Here, setting the budget with the uncalibrated model yields {num(d0v,0,sign=True)} {un}/week on the ground truth; "
+                     f"calibrated, {num(d1v,0,sign=True)}. That's ~{num(dif_sem,0)} {un} per week, ~{num(dif_sem*52,0)} per year. "
+                     f"Switching {NOMES[cx]} off in **20% of regions** for 6 weeks would cost ~{num(perda_20,0)} {un}, once "
+                     f"(less than {pct(perda_20 / y_sem * 100, 0)} of one week's result).\n")
+        else:
+            _b_pt = (f"- **Compare o custo do teste com o risco do erro.** Aqui a decisão de verba já era boa, mas o modelo superestimava o {NOMES[cx]} em {num(gap_roi[cx],0)}%. "
+                     f"Qualquer aumento de verba nele seria justificado por um retorno que não existe. Desligar o {NOMES[cx]} em **20% das regiões** por 6 semanas custaria "
+                     f"~{num(perda_20,0)} {un}, uma vez só.\n")
+            _b_en = (f"- **Compare the cost of the test with the risk of being wrong.** Here the budget decision was already good, but the model overestimated {NOMES[cx]} by {num(gap_roi[cx],0)}%. "
+                     f"Any budget increase there would be justified by a return that doesn't exist. Switching {NOMES[cx]} off in **20% of regions** for 6 weeks would cost "
+                     f"~{num(perda_20,0)} {un}, once.\n")
+        st.markdown(T(
+            "Quase nenhum cliente gosta de ouvir \"vamos desligar a mídia\". A conversa fica mais fácil quando ela é sobre **o custo de continuar decidindo no escuro**:\n\n"
+            f"- **Mostre onde o modelo está em dúvida, e quanto dinheiro tem ali.** \"O modelo explica bem o total, mas não consegue separar o {NOMES[cx]} das promoções. "
+            f"E o {NOMES[cx]} é {pct(share,0)} da sua verba.\"\n"
+            + _b_pt +
+            "- **Não precisa desligar tudo.** Dá para testar em parte das regiões (geo-lift), reduzir 30 a 50% em vez de zerar, "
+            "ou usar os estudos de lift que as próprias plataformas oferecem (como o Conversion Lift do Meta).\n"
+            "- **Aproveite pausas que já iam acontecer.** Corte de verba no fim do trimestre, campanha que acabou, troca de agência: tudo isso vira experimento se for planejado.\n"
+            "- **Venda o que o cliente ganha depois.** Um teste num canal recalibra o modelo inteiro, e o crédito corrigido melhora a leitura dos outros canais também.",
+            "Almost no client likes to hear \"let's switch off the media\". The conversation gets easier when it's about **the cost of keeping on deciding in the dark**:\n\n"
+            f"- **Show where the model is unsure, and how much money sits there.** \"The model explains the total well, but it can't separate {NOMES[cx]} from the promotions. "
+            f"And {NOMES[cx]} is {pct(share,0)} of your budget.\"\n"
+            + _b_en +
+            "- **You don't need to switch everything off.** You can test in some regions (geo-lift), cut 30 to 50% instead of zeroing out, "
+            "or use the lift studies the platforms themselves offer (such as Meta Conversion Lift).\n"
+            "- **Use pauses that were going to happen anyway.** End-of-quarter budget cuts, a campaign that ended, an agency switch: all of these become experiments if planned.\n"
+            "- **Sell what the client gains afterwards.** One test on one channel recalibrates the whole model, and the corrected credit improves the read on the other channels too."))
+        with st.container(border=True):
+            st.markdown(T("**Como eu falaria com o cliente**", "**How I'd say it to the client**"))
+            st.markdown(T(
+                f"\"Hoje o modelo acerta o total, mas está em dúvida sobre o {NOMES[cx]}, que é {pct(share,0)} do seu investimento. "
+                "Se a gente decidir a verba com essa dúvida, pode estar movendo dinheiro na direção errada toda semana. "
+                f"Proponho um teste pequeno: reduzir o {NOMES[cx]} em algumas regiões por 6 semanas. O custo é pequeno e acontece uma vez; "
+                "o que a gente aprende vale para todas as decisões de verba daqui pra frente.\"",
+                f"\"Today the model gets the total right, but it's unsure about {NOMES[cx]}, which is {pct(share,0)} of your investment. "
+                "If we set the budget with that uncertainty, we might be moving money in the wrong direction every week. "
+                f"I suggest a small test: reduce {NOMES[cx]} in a few regions for 6 weeks. The cost is small and happens once; "
+                "what we learn applies to every budget decision from here on.\""))
