@@ -295,10 +295,27 @@ with abas[0]:
     st.markdown(T(
         "Aqui há **dois modelos independentes**, um para cada resultado que a mídia tenta explicar: **novas contas abertas** "
         "(KPI de volume, sem valor em R$) e **receita gerada** (KPI monetário). Para cada um, comparo uma primeira tentativa "
-        "(**ingênuo**) com uma versão **ajustada**. A aba *Conceitos* explica cada termo e a aba *Por que ajustar?* detalha os parâmetros.",
+        "(**ingênuo**) com uma versão **ajustada** e, por fim, com uma versão **calibrada** por um experimento. A aba *Conceitos* explica cada termo e a aba *Parâmetros* detalha a configuração de cada um.",
         "There are **two independent models** here, one for each outcome the media tries to explain: **new accounts opened** "
         "(a volume KPI, with no R$ value) and **revenue generated** (a monetary KPI). For each one, I compare a first attempt "
-        "(**naive**) with a **tuned** version. The *Concepts* tab explains each term and the *Why tune?* tab details the parameters."))
+        "(**naive**) with a **tuned** version and, finally, with a version **calibrated** by an experiment. The *Concepts* tab explains each term and the *Parameters* tab details each one's setup."))
+    with st.container(border=True):
+        st.markdown(T("#### Os três modelos, em uma frase cada", "#### The three models, one sentence each"))
+        st.markdown(T(
+            "- **Ingênuo:** o Meridian como vem de fábrica. Configuração padrão, só com os controles óbvios (desemprego, IPCA, feriados, Black Friday). "
+            "É o que quase todo mundo roda na primeira vez.\n"
+            "- **Ajustado:** o mesmo modelo com contexto do negócio. Ganha sazonalidade do ano (e novembro/dezembro), uma tendência mais suave "
+            "e uma faixa plausível de ROI para os canais, que só corta valores absurdos.\n"
+            "- **Calibrado:** o ajustado mais **um experimento**. O canal em que o modelo mais erra é testado (desligado por algumas semanas), "
+            "e o ROI medido no teste entra como prior daquele canal. Todo o resto fica igual ao ajustado.\n\n"
+            "Os três usam **os mesmos dados**. O que muda é só o que cada modelo sabe antes de olhar para eles.",
+            "- **Naive:** Meridian out of the box. Default settings, with only the obvious controls (unemployment, IPCA, holidays, Black Friday). "
+            "It's what almost everyone runs the first time.\n"
+            "- **Tuned:** the same model with business context. It gets yearly seasonality (plus November/December), a smoother trend "
+            "and a plausible ROI range for the channels, which only rules out absurd values.\n"
+            "- **Calibrated:** the tuned model plus **one experiment**. The channel the model gets most wrong is tested (switched off for a few weeks), "
+            "and the ROI measured in the test becomes that channel's prior. Everything else stays as in the tuned model.\n\n"
+            "All three use **the same data**. The only thing that changes is what each model knows before looking at it."))
     c_link1, c_link2, _ = st.columns([1.4, 1.4, 3])
     c_link1.link_button(T("Notebook no Colab (somente leitura)", "Notebook on Colab (read-only)"), COLAB_URL)
     c_link2.link_button(T("Documentação do Meridian", "Meridian documentation"), DOCS["home"])
@@ -307,6 +324,9 @@ with abas[0]:
     info = KPIS[kk]
     a_i, a_j = ler(f"acc_{info['ing']}.csv").iloc[0], ler(f"acc_{kk}.csv").iloc[0]
     e_i, mid_i = erro_atribuicao(info["ing"]); e_j, mid_j = erro_atribuicao(kk)
+    _tem_cal = os.path.exists(os.path.join(RES, f"acc_calib_{kk}.csv"))
+    if _tem_cal:
+        a_c = ler(f"acc_calib_{kk}.csv").iloc[0]; e_c, mid_c = erro_atribuicao(f"calib_{kk}")
     mid_v = sum(V[info["chave"]]["canais"][c]["contribuicao_pct"] * 100 for c in CANAIS)
     st.markdown(T(f"##### KPI analisado: **{info['rotulo']}** ({'volume' if info['volume'] else 'monetário'})",
                   f"##### KPI analyzed: **{info['rotulo']}** ({'volume' if info['volume'] else 'monetary'})"))
@@ -320,14 +340,16 @@ with abas[0]:
                      "It can only be measured because the data is synthetic and the ground truth is known."))
     k3.metric(T("MAPE no teste: ajustado", "Test MAPE: tuned"), pct(a_j["mape_teste"] * 100))
     k4.metric(T("Erro de atribuição: ajustado", "Attribution error: tuned"), f"{num(e_j,1)} p.p.", delta=f"{num(e_j - e_i,1)} p.p.", delta_color="inverse")
+    _rows = [("ing", a_i, e_i, mid_i), ("aj", a_j, e_j, mid_j)] + ([("cal", a_c, e_c, mid_c)] if _tem_cal else [])
+    _nm = {"ing": T("Ingênuo", "Naive"), "aj": T("Ajustado", "Tuned"), "cal": T("Calibrado", "Calibrated")}
     tab_res = pd.DataFrame({
-        T("Modelo", "Model"): [T("Ingênuo", "Naive"), T("Ajustado", "Tuned")],
-        T("MAPE treino", "Train MAPE"): [pct(a_i["mape_treino"] * 100), pct(a_j["mape_treino"] * 100)],
-        T("MAPE teste", "Test MAPE"): [pct(a_i["mape_teste"] * 100), pct(a_j["mape_teste"] * 100)],
-        T("R² teste", "Test R²"): [num(a_i["r2_teste"], 2), num(a_j["r2_teste"], 2)],
-        T("Erro de atribuição (p.p.)", "Attribution error (p.p.)"): [num(e_i, 1), num(e_j, 1)],
-        T("Mídia paga total (% do KPI)", "Total paid media (% of KPI)"): [pct(mid_i), pct(mid_j)],
-        T("Verdade: mídia total (% do KPI)", "Ground truth: total media (% of KPI)"): [pct(mid_v), pct(mid_v)]})
+        T("Modelo", "Model"): [_nm[k_] for k_, *_ in _rows],
+        T("MAPE treino", "Train MAPE"): [pct(a_["mape_treino"] * 100) for _, a_, _e, _m in _rows],
+        T("MAPE teste", "Test MAPE"): [pct(a_["mape_teste"] * 100) for _, a_, _e, _m in _rows],
+        T("R² teste", "Test R²"): [num(a_["r2_teste"], 2) for _, a_, _e, _m in _rows],
+        T("Erro de atribuição (p.p.)", "Attribution error (p.p.)"): [num(_e, 1) for _, a_, _e, _m in _rows],
+        T("Mídia paga total (% do KPI)", "Total paid media (% of KPI)"): [pct(_m) for _, a_, _e, _m in _rows],
+        T("Verdade: mídia total (% do KPI)", "Ground truth: total media (% of KPI)"): [pct(mid_v) for _ in _rows]})
     st.dataframe(tab_res, hide_index=True)
 
     st.markdown(T("### O que este projeto tem de diferente de um MMM de livro", "### What sets this project apart from a textbook MMM"))
@@ -666,6 +688,8 @@ with abas[3]:
                    f"{M['chains']} chains, {M['adapt']}/{M['burnin']}/{M['keep']} (adapt/burn-in/kept)"), T("Igual", "Same"), T("Mantido", "Kept")]],
         columns=[_c_item, T("Ingênuo", "Naive"), T("Ajustado", "Tuned"), T("Por que mudei", "Why I changed it")])
     st.table(cfg.replace(r"\*\*", "", regex=True).set_index(_c_item))
+    st.caption(T("Existe ainda um terceiro modelo, o **calibrado**: igual ao ajustado, mas com o prior de ROI de um canal vindo de um experimento. Ele está na aba *Calibração com experimento*.",
+                 "There is also a third model, the **calibrated** one: same as the tuned model, but with one channel's ROI prior coming from an experiment. It's in the *Calibrating with an experiment* tab."))
     st.caption(T(f"Priors padrão do Meridian: {link('documentação', DOCS['priors_padrao'])}. Detalhes do prior para KPI sem receita: {link('documentação', DOCS['kpi_sem_receita'])}.",
                  f"Meridian default priors: {link('documentation', DOCS['priors_padrao'])}. Details of the prior for a non-revenue KPI: {link('documentation', DOCS['kpi_sem_receita'])}."))
 
@@ -1123,6 +1147,17 @@ with abas[9]:
         [T("Prior do ponto de saturação (ec)", "Saturation point prior (ec)"), T("TruncNormal(0,8; 0,8; 0,1; 10)", "TruncNormal(0.8, 0.8, 0.1, 10)"), _igual],
         [T("Prior da inclinação do Hill (slope)", "Hill slope prior (slope)"), T("fixa em 1", "fixed at 1"), T("igual (fixa em 1)", "same (fixed at 1)")]],
         columns=[T("Parâmetro", "Parameter"), T("Modelo ingênuo", "Naive model"), T("Modelo ajustado", "Tuned model")])
+    _cal_col = []
+    _exs = {k_: ler(f"experimento_{k_}.csv").iloc[0] for k_ in ("contas", "receita") if os.path.exists(os.path.join(RES, f"experimento_{k_}.csv"))}
+    for par_ in cfg.iloc[:, 0]:
+        k_ = "contas" if par_ == T("Prior de ROI (novas contas)", "ROI prior (new accounts)") else ("receita" if par_ == T("Prior de ROI (receita)", "ROI prior (revenue)") else None)
+        if k_ and k_ in _exs:
+            e_ = _exs[k_]
+            _cal_col.append(T(f"igual ao ajustado, exceto {NOMES[e_['canal']]}: 95% em [{num(e_['ic95_lo'],2)}; {num(e_['ic95_hi'],2)}], vindo do experimento",
+                              f"same as tuned, except {NOMES[e_['canal']]}: 95% in [{num(e_['ic95_lo'],2)}, {num(e_['ic95_hi'],2)}], from the experiment"))
+        else:
+            _cal_col.append(T("igual ao ajustado", "same as tuned"))
+    if _exs: cfg[T("Modelo calibrado", "Calibrated model")] = _cal_col
     st.table(cfg)
     st.caption(T("A inclinação fica fixa em 1 (padrão do Meridian), mas o gerador usa valores entre 1,1 e 2,0: é uma simplificação que o modelo faz e que aparece nas curvas.",
                  "The slope is fixed at 1 (the Meridian default), but the generator uses values between 1.1 and 2.0: it is a simplification the model makes and it shows up in the curves."))
